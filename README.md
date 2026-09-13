@@ -63,6 +63,27 @@ pages so the server-rendered markup stays the source of truth.
    machine, other devices on the same WiFi network can reach it too using your
    computer's local IP instead of `localhost` (e.g. `http://192.168.1.23:3000/`).
 
+## Local development via yourq-api (optional)
+
+By default (`.env` with no `DEV_API_URL`/`SUPABASE_URL`), the app stores data in
+a local JSON file — no setup needed. If you'd rather develop against a real
+Postgres database locally, route the app through the sibling **yourq-api**
+(.NET) project instead of Supabase:
+
+1. Create a local Postgres database, e.g. `createdb yourq`.
+2. In `yourq-api/appsettings.Development.json`, point `ConnectionStrings:Postgres`
+   at it.
+3. Run the API: `dotnet run --project ../yourq-api` (it creates the tables on
+   startup — see `yourq-api/Database/schema.sql`). It listens on
+   `http://localhost:5103` by default.
+4. In this project's `.env`, set `DEV_API_URL=http://localhost:5103` and leave
+   `SUPABASE_URL`/`SUPABASE_KEY` blank.
+5. `npm start` as usual — `db.js`/`storage.js` are unchanged; only the storage
+   backend they talk to differs.
+
+This path is **dev-only**. Production keeps talking to Supabase directly (see
+below) — `yourq-api` is never deployed alongside it.
+
 ## Hosting it online
 
 The app can be deployed two ways. **The code auto-detects where it runs** — no

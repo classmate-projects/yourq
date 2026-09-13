@@ -4,17 +4,23 @@ const fs = require('fs/promises');
 const { createClient } = require('@supabase/supabase-js');
 const { todayStr } = require('./util');
 
-// Persistence: use Supabase (a hosted Postgres DB) when configured, otherwise a
-// local JSON file so `npm start` works with no setup. The whole app state
-// ({ services, tokens }) is stored as one JSON document in the `queue_state`
-// table (row id = 'main').
+// Persistence has three backends, in priority order:
+//   1. DEV_API_URL set   -> local dev only: the yourq-api (.NET) server, which
+//      itself talks to a local Postgres instance. Never used in production.
+//   2. SUPABASE_URL/KEY set -> production: Supabase (hosted Postgres) directly.
+//   3. neither set        -> local JSON file, so `npm start` works with no setup.
+// The whole app state ({ services, tokens }) is stored as one JSON document,
+// keyed by a fixed row id ('main'), whichever backend is active.
+const DEV_API_URL = process.env.DEV_API_URL;
+const USE_DEV_API = !!DEV_API_URL;
+
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY =
   process.env.SUPABASE_KEY ||
   process.env.SUPABASE_SECRET_KEY ||
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
+const USE_SUPABASE = !USE_DEV_API && !!(SUPABASE_URL && SUPABASE_KEY);
 
 const TABLE = 'queue_state';
 const ROW_ID = 'main';
@@ -59,7 +65,19 @@ function supabase() {
   return client;
 }
 
+// Dev API helper: throws on any non-2xx response so a broken local API/DB
+// surfaces immediately instead of silently falling through.
+async function devApiFetch(pathname, options) {
+  const res = await fetch(`${DEV_API_URL}${pathname}`, options);
+  if (!res.ok) throw new Error(`yourq-api ${pathname} failed: ${res.status} ${await res.text()}`);
+  return res.json();
+}
+
 async function read() {
+  if (USE_DEV_API) {
+    const body = await devApiFetch('/api/queue-state');
+    return normalize(body.data);
+  }
   if (USE_SUPABASE) {
     const { data, error } = await supabase().from(TABLE).select('data').eq('id', ROW_ID).maybeSingle();
     // Throw on a real query error (don't silently return empty — a later write
@@ -75,6 +93,14 @@ async function read() {
 }
 
 async function write(state) {
+  if (USE_DEV_API) {
+    await devApiFetch('/api/queue-state', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: state }),
+    });
+    return;
+  }
   if (USE_SUPABASE) {
     const { error } = await supabase()
       .from(TABLE)
@@ -92,6 +118,10 @@ async function write(state) {
 const SUB_TABLE = 'subscription';
 
 async function readSubscription() {
+  if (USE_DEV_API) {
+    const body = await devApiFetch('/api/subscription');
+    return { plan: (body.plan || 'free').toLowerCase(), expiryDate: body.expiryDate || null };
+  }
   if (USE_SUPABASE) {
     const { data, error } = await supabase()
       .from(SUB_TABLE)
@@ -108,6 +138,14 @@ async function readSubscription() {
 }
 
 async function writeSubscription(sub) {
+  if (USE_DEV_API) {
+    await devApiFetch('/api/subscription', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan: sub.plan, expiryDate: sub.expiryDate }),
+    });
+    return;
+  }
   if (USE_SUPABASE) {
     const { error } = await supabase()
       .from(SUB_TABLE)
