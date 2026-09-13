@@ -1,42 +1,122 @@
-# YourQ — Service Token Queue System
+<div align="center">
 
-A simple token queue system for service counters. Customers take a token for a
-service; staff at one or more desks call tokens in order; and a "Now Serving"
-board shows, live, which token each desk is currently calling. Admins manage the
-list of services (and how many desks each has) and download a daily report of
-how many customers arrived per service.
+# YourQ
+
+**A simple, no-frills token queue system for service counters.**
+
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Express-4.x-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![EJS](https://img.shields.io/badge/View%20Engine-EJS-a91e50)](https://ejs.co/)
+[![Supabase](https://img.shields.io/badge/Storage-Supabase%20%2F%20Postgres-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Deploy](https://img.shields.io/badge/Deploy-Netlify%20%7C%20Render-informational)](#hosting-it-online)
+
+</div>
+
+---
+
+## The idea
+
+Walk into a pharmacy, clinic, or government office and you'll usually find one
+of two things: a paper ticket dispenser, or nothing at all — just people
+hovering near the counter hoping to be noticed next. **YourQ** is a lightweight
+digital stand-in for the ticket dispenser: customers tap a service to get a
+number, staff at each desk call the next number in order, and a shared display
+board announces who's up — with a chime. No app to install, no accounts to
+create; it just runs in a browser on whatever's already at the counter.
+
+It's built to be **boringly reliable**: a handful of Express routes, server-rendered
+pages so there's no loading flash, and a storage layer that gracefully falls
+back to a local JSON file when there's no database configured at all.
+
+## Table of contents
+
+- [Pages](#pages)
+- [Features](#features)
+- [Tech stack](#tech-stack)
+- [Project structure](#project-structure)
+- [Setup](#setup)
+- [Local development via yourq-api (optional)](#local-development-via-yourq-api-optional)
+- [Hosting it online](#hosting-it-online)
+- [How it works](#how-it-works)
+- [Notes](#notes)
+- [Related project](#related-project)
 
 ## Pages
 
-- **Home** — `http://localhost:3000/` — a landing hub with links to the four
-  pages below (Take a Token, Now Serving, Desk Control, Admin).
-- **Customer page** — `http://localhost:3000/customer` — grid of services. The
-  customer taps a service, then presses **OK** to take a token. (Tap a different
-  service before OK to change the choice.)
-- **Now Serving board** — `http://localhost:3000/display` — open on a screen in
-  the waiting area. For each service it shows every desk and the token that desk
-  is currently calling. Updates live (instantly on a persistent server, or
-  within ~2s on Netlify) whenever a desk calls or
-  recalls a token. It also chimes: a two-tone "ding-dong" when a new token is
-  called and a distinct triple-beep on a recall. Click **Enable sound** once
-  (top-right) to allow audio — browsers block sound until you interact with the
-  page.
-- **Desk control** — `http://localhost:3000/desk` — for staff. Pick a service and
-  you'll see all of its desks, each with **Call Next** and **Recall**:
-  - **Call Next** serves the next waiting token (FIFO). A desk can't call past
-    the last token taken — it shows "No one waiting" when the queue is caught up.
-  - **Recall** re-announces the token that desk is already serving (flashes it on
-    the board) without advancing the queue.
-- **Admin page** — `http://localhost:3000/admin` — password-protected. Add or
-  delete services, set how many desks each service has, and download a CSV report
-  of customers served per service for any date.
+| Page | Route | Who it's for |
+|---|---|---|
+| **Home** | `/` | Everyone — a landing hub linking to the four pages below |
+| **Customer** | `/customer` | Customers — tap a service, then **OK** to take a token |
+| **Now Serving board** | `/display` | The waiting area — shows every desk and the token it's calling, live, with a chime |
+| **Desk control** | `/desk` | Staff — **Call Next** (FIFO) and **Recall** the token they're serving |
+| **Admin** | `/admin` | Managers — password-protected: manage services/desks, download reports |
 
 All pages are rendered server-side by Express/EJS (`views/`), so the initial
 state is baked into the HTML with no loading flash. Client JS (`public/js/`)
-handles interactions and refreshes the live numbers (a persistent server pushes
-instantly; on Netlify the pages poll every ~2s). Adding,
-deleting, or changing a service (including its desk count) reloads the affected
-pages so the server-rendered markup stays the source of truth.
+handles interactions and refreshes the live numbers — instantly on a
+persistent server, or via a ~2s poll on Netlify. Adding, deleting, or changing
+a service (including its desk count) reloads the affected pages so the
+server-rendered markup stays the source of truth.
+
+## Features
+
+**Customer-facing**
+- Grid of active services; tap to pick one, **OK** to take a token
+- Per-service, per-day token numbering that resets automatically at local midnight
+
+**Now Serving board**
+- Live view of every desk's current token, per service
+- Two-tone chime on a new call, a distinct triple-beep on a recall
+- Theme-aware (follows the device's light/dark setting)
+
+**Desk control**
+- FIFO **Call Next** — can't call past the last token taken
+- **Recall** — re-announces the desk's current token without advancing the queue
+- Works across any number of desks per service
+
+**Admin**
+- Add/remove services and set each service's desk count
+- Daily CSV report of customers served per service, for any date
+- Subscription status (Free/Pro) with a renew reminder near expiry
+
+**Under the hood**
+- Server-rendered pages (no client-side framework, no build step)
+- Storage auto-detects its backend: local dev API → Supabase → local JSON file
+- Auto-downgrades a Pro subscription to Free when it expires — no manual step
+- Distinct, stable colors per service across every page
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Runtime | Node.js 18+ |
+| Server | Express |
+| Views | EJS (server-rendered) |
+| Client JS | Vanilla JS (`public/js/`), no framework |
+| Storage (production) | Supabase (hosted Postgres) |
+| Storage (local dev, optional) | [yourq-api](#related-project) → local Postgres |
+| Storage (no setup) | Local JSON file |
+| Hosting | Netlify (serverless) or Render/Railway/Fly.io (persistent) |
+
+## Project structure
+
+```
+yourq/
+├── app.js                # Express app: routes, pages, API
+├── server.js             # Local entry point (npm start)
+├── netlify/functions/     # Same app, wrapped for Netlify's serverless runtime
+├── views/                # EJS templates (home, index, display, desk, admin)
+├── public/                # Static assets: css/, js/, favicon
+├── src/
+│   ├── db.js              # Queue/service business logic
+│   ├── storage.js         # Persistence backend (dev API / Supabase / file)
+│   ├── auth.js             # Admin password auth
+│   ├── subscription.js     # Free/Pro plan limits & expiry evaluation
+│   └── util.js
+├── supabase/schema.sql    # Production database schema
+├── netlify.toml           # Netlify build/deploy config
+└── render.yaml            # Render Blueprint config
+```
 
 ## Setup
 
@@ -67,7 +147,7 @@ pages so the server-rendered markup stays the source of truth.
 
 By default (`.env` with no `DEV_API_URL`/`SUPABASE_URL`), the app stores data in
 a local JSON file — no setup needed. If you'd rather develop against a real
-Postgres database locally, route the app through the sibling **yourq-api**
+Postgres database locally, route the app through the sibling **[yourq-api](#related-project)**
 (.NET) project instead of Supabase:
 
 1. Create a local Postgres database, e.g. `createdb yourq`.
@@ -176,3 +256,11 @@ persistent disk/volume and point `QUEUE_DB_PATH` at it (see `render.yaml`).
   desk pages are open on the local network. This is enough to keep casual
   visitors from editing services — not a substitute for real access control if
   the app is exposed to the internet.
+
+## Related project
+
+- **[yourq-api](https://github.com/classmate-projects/yourq-api)** — a small
+  .NET API used only in local development, so this app can develop against a
+  real local Postgres database instead of production Supabase. It lives in its
+  own, independent Git repository — it is not a subfolder of this one and is
+  never deployed alongside production.
