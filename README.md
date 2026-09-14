@@ -153,8 +153,8 @@ Postgres database locally, route the app through the sibling **[yourq-api](#rela
 1. Create a local Postgres database, e.g. `createdb yourq`.
 2. In `yourq-api/appsettings.Development.json`, point `ConnectionStrings:Postgres`
    at it.
-3. Run the API: `dotnet run --project ../yourq-api` (it creates the tables on
-   startup — see `yourq-api/Database/schema.sql`). It listens on
+3. Run the API: `dotnet run --project ../yourq-api` (it applies its EF Core
+   migrations on startup — see `yourq-api/Migrations/`). It listens on
    `http://localhost:5103` by default.
 4. In this project's `.env`, set `DEV_API_URL=http://localhost:5103` and leave
    `SUPABASE_URL`/`SUPABASE_KEY` blank.
